@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>VRM Presentation</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin: 0; background: #222; font-family: system-ui, sans-serif; }
+    canvas { display: block; }
+    #toolbar {
+      position: absolute; top: 10px; left: 10px; z-index: 30;
+      display: flex; gap: 10px; align-items: center;
+      background: rgba(0,0,0,.5); padding: 8px 10px; border-radius: 8px; color: #fff;
+    }
+    #settings {
+      position: absolute; top: 60px; left: 10px; z-index: 25;
+      display: none; background: rgba(0,0,0,.55);
+      padding: 10px 12px; border-radius: 8px; color: #fff; min-width: 340px;
+    }
+    #settings h3 { margin: 6px 0 10px; font-size: 14px; opacity: .9; }
+    #panel-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    #model-settings, #slide-settings { min-height: 220px; }
+
+    /* ← 左下基準に変更 */
+    #slide {
+      position: absolute; left: 20px; bottom: 20px; width: 40vw;
+      border: 2px solid #fff; z-index: 15;
+    }
+    /*
+    #subtitle {
+      position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%);
+      color: #fff; background: rgba(0,0,0,.55); padding: 6px 10px; border-radius: 6px; z-index: 20;
+    }
+    */
+    #subtitle { display: none !important; }
+
+    #app { position: relative; z-index: 10; }
+
+    /* エディタ */
+    #openEditorBtn { position: absolute; top: 10px; right: 10px; z-index: 35; }
+    #editorModal { display:none; position:absolute; inset:40px; z-index:40; background:#111a; backdrop-filter: blur(4px); }
+    #editorPanel { position:absolute; inset:20px; background:#1e1e1e; color:#fff; padding:12px; border-radius:10px; overflow:auto; }
+
+    /* 小型ドロップゾーン（ツールバー内） */
+    #slidesDropzone {
+      width: 24px; height: 24px; border: 2px dashed #888; color: #ccc;
+      font-weight: bold; font-size: 16px; display: flex; align-items: center;
+      justify-content: center; cursor: pointer; border-radius: 4px;
+    }
+    #slidesDropzone.dragover { border-color: #fff; color: #fff; }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <label>VRM: <input type="file" id="vrmFile" accept=".vrm" /></label>
+    <button id="openSettingsBtn" disabled>設定を開く</button>
+    <button id="startBtn" style="display:none;">発表開始</button>
+    <button id="pauseBtn" style="display:none;">一時停止</button>
+    <button id="resumeBtn" style="display:none;">再開</button>
+    <button id="stopBtn" style="display:none;">停止</button>
+
+    <!-- スライド追加UI -->
+    <input id="slidesFileInput" type="file" accept=".png,.jpg,.jpeg,.PNG,.JPG" multiple style="display:none" />
+    <button id="slidesUploadBtn">スライドを追加</button>
+    <div id="slidesDropzone" title="画像をドラッグ＆ドロップ">＋</div>
+  </div>
+
+  <!-- 台本エディタ起動ボタン -->
+  <button id="openEditorBtn">台本エディタ</button>
+
+  <!-- 設定パネル -->
+  <div id="settings">
+    <h3>プレゼン設定</h3>
+    <div style="margin-bottom:8px;">
+      <label>VOICEVOX 話者: <select id="speakerSelect"></select></label>
+    </div>
+    <div id="panel-grid">
+      <div>
+        <h3>モデル位置</h3>
+        <div id="model-settings"></div>
+      </div>
+      <div>
+        <h3>スライド位置・大きさ</h3>
+        <div id="slide-settings"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 台本エディタ（モーダル） -->
+  <div id="editorModal">
+    <div id="editorPanel">
+      <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <button id="editorCloseBtn">閉じる</button>
+        <button id="editorLoadBtn">現在のscript.jsonを読み込み</button>
+        <button id="editorDownloadBtn">JSONをダウンロード</button>
+        <button id="editorSaveBtn">上書き保存</button>
+        <button id="editorApplyBtn" style="margin-left:auto;">この台本でプレビュー再生</button>
+      </div>
+      <div id="scriptEditorRoot"></div>
+    </div>
+  </div>
+
+  <div id="app"></div>
+  <img id="slide" alt="slide"/>
+  <video id="slideVideo"
+    style="position:absolute; left:20px; bottom:20px; width:40vw; border:2px solid #fff; z-index:15; display:none;"
+    muted playsinline controls></video>
+  <div id="subtitle"></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
