@@ -1,4 +1,6 @@
-// src/AvatarController.ts
+// AvatarController.ts
+// VRMアバターを読み込み、表示、操作、モーション制御するクラス。
+// マウスドラッグによる位置調整、表情や口パク制御、腕の調整UI、ジェスチャー動作など多機能を持つ。
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { VRM, VRMLoaderPlugin, VRMUtils, VRMHumanBoneName } from '@pixiv/three-vrm'
 import * as THREE from 'three'
@@ -6,6 +8,7 @@ import GUI from 'lil-gui'
 import { IdleController } from './IdleController'
 
 export class AvatarController {
+  // ===== Three.jsの基本構成要素 =====
   scene: THREE.Scene
   camera: THREE.PerspectiveCamera
   renderer: THREE.WebGLRenderer
@@ -13,7 +16,7 @@ export class AvatarController {
   mouthWeight = 0
   gui?: GUI
 
-  // 直感操作用
+  // ===== ドラッグ操作に必要な変数 =====
   private raycaster = new THREE.Raycaster()
   private dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)
   private isDragging = false
@@ -21,49 +24,53 @@ export class AvatarController {
   private lastMouse = new THREE.Vector2()
   private dom!: HTMLCanvasElement
 
-  // アイドル揺れ
+  // ===== アイドル（自然揺れ）管理 ====
   private idle?: IdleController
   private speaking = false
 
-  // 腕ニュートラル（スライダー用）
+  // ===== 腕ニュートラル位置調整用 =====
   private armNeutral = { L: { x: 0, y: 0, z: 0 }, R: { x: 0, y: 0, z: 0 } } // degree
   private armBaseQuatL?: THREE.Quaternion
   private armBaseQuatR?: THREE.Quaternion
   private armUi?: HTMLElement
 
   constructor(container: HTMLElement) {
+    // シーンとカメラの初期化
     this.scene = new THREE.Scene()
     this.camera = new THREE.PerspectiveCamera(35, window.innerWidth / window.innerHeight, 0.1, 1000)
     this.camera.position.set(0, 1.4, 2)
 
+    // アルファ対応のWebGLレンダラーを生成
     this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     this.renderer.setSize(window.innerWidth, window.innerHeight)
     container.appendChild(this.renderer.domElement)
     this.dom = this.renderer.domElement
 
+    // ライティング設定（平行光＋環境光）
     const light = new THREE.DirectionalLight(0xffffff, 1.2)
     light.position.set(1, 1.75, 2)
     this.scene.add(light)
     this.scene.add(new THREE.AmbientLight(0xffffff, 0.5))
 
+    // ウィンドウリサイズ対応
     window.addEventListener('resize', () => {
       this.camera.aspect = window.innerWidth / window.innerHeight
       this.camera.updateProjectionMatrix()
       this.renderer.setSize(window.innerWidth, window.innerHeight)
     })
 
+    // マウス・ポインターイベントのバインド
     this.bindPointerEvents()
 
-    // 保存してあれば読み込み
+    // ローカルストレージから腕ニュートラル値を復元
     try {
       const saved = localStorage.getItem('armNeutralOffsets')
       if (saved) this.armNeutral = JSON.parse(saved)
     } catch {}
   }
 
-  // ========= 基本 =========
-
+  // ===== VRMモデル読み込み処理 =====
   async loadVRM(fileOrUrl: File | string, guiContainer?: HTMLElement) {
     if (this.vrm) {
       this.scene.remove(this.vrm.scene)
@@ -75,13 +82,17 @@ export class AvatarController {
       this.gui = undefined
     }
 
+    // VRM対応GLTFローダーを準備
     const loader = new GLTFLoader()
     loader.register(parser => new VRMLoaderPlugin(parser))
 
+
+    // VRM対応GLTFローダーを準備
     const url = fileOrUrl instanceof File ? URL.createObjectURL(fileOrUrl) : fileOrUrl
     const gltf = await loader.loadAsync(url)
     const vrm = gltf.userData.vrm as VRM
 
+    // VRMモデルの向きを補正してシーンに追加
     VRMUtils.rotateVRM0(vrm)
     this.scene.add(vrm.scene)
     this.vrm = vrm
@@ -93,7 +104,7 @@ export class AvatarController {
     this.cacheArmBaseQuats()
     this.applyArmNeutral()
 
-    // アイドル揺れ
+    // アイドル揺れセット
     this.idle = new IdleController(this.vrm)
 
     if (guiContainer) {
@@ -103,10 +114,11 @@ export class AvatarController {
     }
   }
 
+  // ===== GUIのセットアップ =====
   private setupGUI(model: THREE.Object3D, container: HTMLElement) {
     this.gui = new GUI({ container })
     const pos = this.gui.addFolder('Position')
-    pos.add(model.position, 'x', -2, 2, 0.01)
+    pos.add(model.position, 'x', -2, 200, 0.01)
     pos.add(model.position, 'y', -2, 2, 0.01)
     pos.add(model.position, 'z', -2, 2, 0.01)
     const rot = this.gui.addFolder('Rotation')
@@ -196,11 +208,21 @@ export class AvatarController {
 
     this.dom.addEventListener('wheel', (e) => {
       if (!this.vrm) return
-      const k = Math.exp(-e.deltaY * 0.001)
-      const s = this.vrm.scene.scale.x * k
-      const clamped = Math.min(3, Math.max(0.1, s))
-      this.vrm.scene.scale.set(clamped, clamped, clamped)
-      e.preventDefault()
+
+      if (e.ctrlKey) {
+        // === 回転（頭-足のY軸） ===
+        const rotStep = -e.deltaY * 0.002 // 回転感度
+        this.vrm.scene.rotateY(rotStep)
+      } else {
+        // === ズーム（等倍スケール） ===
+        const k = Math.exp(-e.deltaY * 0.001) // ズーム感度
+        const s = this.vrm.scene.scale.x * k
+        const clamped = Math.min(3, Math.max(0.1, s)) // 0.1〜3に制限
+        this.vrm.scene.scale.set(clamped, clamped, clamped)
+      }
+
+      this.vrm.update(0)
+      e.preventDefault() // ブラウザのデフォルト（ページズーム等）を抑止
     }, { passive: false })
   }
 
