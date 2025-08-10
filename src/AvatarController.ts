@@ -424,6 +424,26 @@ export class AvatarController {
     })
   }
 
+  private tweenQuatTo(
+    node: THREE.Object3D,
+    toQuat: THREE.Quaternion,
+    durationMs: number,
+    onUpdate?: () => void
+  ): Promise<void> {
+    return new Promise((resolve) => {
+      const from = node.quaternion.clone()
+      const start = performance.now()
+      const tick = (t: number) => {
+        const p = Math.min(1, (t - start) / durationMs)
+        node.quaternion.copy(from).slerp(toQuat, p)
+        onUpdate?.()
+        if (p < 1) requestAnimationFrame(tick)
+        else resolve()
+      }
+      requestAnimationFrame(tick)
+    })
+  }
+
   // ========= ジェスチャ =========
 
   // 口
@@ -558,21 +578,56 @@ export class AvatarController {
     }
   }
 
-  async bow(durationMs = 600) {
+  private async bow(durationMs = 800, depth = 1) {
+    // depth: 0(浅い)〜1(深い) で調整
     const h = this.vrm?.humanoid
-    const chest = h?.getNormalizedBoneNode(VRMHumanBoneName.Chest) || h?.getNormalizedBoneNode(VRMHumanBoneName.UpperChest)
-    const neck = h?.getNormalizedBoneNode(VRMHumanBoneName.Neck)
+    const hips  = h?.getNormalizedBoneNode(VRMHumanBoneName.Hips)      // あれば少しだけ腰も前傾
+    const chest = h?.getNormalizedBoneNode(VRMHumanBoneName.UpperChest) 
+              || h?.getNormalizedBoneNode(VRMHumanBoneName.Chest)
+    const neck  = h?.getNormalizedBoneNode(VRMHumanBoneName.Neck)
     if (!chest || !neck) return
 
-    const c0 = chest.quaternion.clone()
-    const n0 = neck.quaternion.clone()
+    // 元姿勢
+    const hip0 = hips?.quaternion.clone()
+    const c0   = chest.quaternion.clone()
+    const n0   = neck.quaternion.clone()
+
+    // 目標角度（度数）を depth で補間
+    const lerp = (a:number,b:number,t:number)=> a+(b-a)*Math.min(Math.max(t,0),1)
+    const hipDeg   = lerp( 0, 10, depth)   // 腰は控えめ
+    const chestDeg = lerp(18, 35, depth)   // 胸をしっかり前傾
+    const neckDeg  = lerp(12, 25, depth)   // 首もやや深めに
+
+    // 目標クォータニオン（= 元 * オフセット）
+    const qHip   = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(-hipDeg),   0, 0))
+    const qChest = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(-chestDeg), 0, 0))
+    const qNeck  = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(-neckDeg),  0, 0))
+
+    const hipTarget   = hip0 ? hip0.clone().multiply(qHip)   : undefined
+    const chestTarget = c0.clone().multiply(qChest)
+    const neckTarget  = n0.clone().multiply(qNeck)
+
+    // 時間配分：下げ40% → キープ20% → 戻し40%
+    const down = Math.max(80, durationMs * 0.4)
+    const hold = Math.max(0,  durationMs * 0.2)
+    const up   = Math.max(80, durationMs * 0.4)
 
     try {
-      await this.tweenQuat(chest, new THREE.Euler(THREE.MathUtils.degToRad(-15), 0, 0), durationMs / 2, () => this.vrm?.update(0))
-      await this.tweenQuat(chest, new THREE.Euler(0, 0, 0), durationMs / 2, () => this.vrm?.update(0))
-      await this.tweenQuat(neck, new THREE.Euler(THREE.MathUtils.degToRad(-10), 0, 0), durationMs / 2, () => this.vrm?.update(0))
-      await this.tweenQuat(neck, new THREE.Euler(0, 0, 0), durationMs / 2, () => this.vrm?.update(0))
+      // 下げる
+      if (hips && hipTarget)  await this.tweenQuatTo(hips,  hipTarget,   down, () => this.vrm?.update(0))
+      await this.tweenQuatTo(chest, chestTarget, down, () => this.vrm?.update(0))
+      await this.tweenQuatTo(neck,  neckTarget,  down, () => this.vrm?.update(0))
+
+      // キープ
+      if (hold > 0) await new Promise(r => setTimeout(r, hold))
+
+      // 戻す（元姿勢へ）
+      if (hips && hip0) await this.tweenQuatTo(hips,  hip0, up, () => this.vrm?.update(0))
+      await this.tweenQuatTo(chest, c0,   up, () => this.vrm?.update(0))
+      await this.tweenQuatTo(neck,  n0,   up, () => this.vrm?.update(0))
     } finally {
+      // 念のため原状復帰
+      if (hips && hip0) hips.quaternion.copy(hip0)
       chest.quaternion.copy(c0)
       neck.quaternion.copy(n0)
       this.vrm?.update(0)
@@ -583,11 +638,13 @@ export class AvatarController {
     const head = this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
     if (!head) return
     const head0 = head.quaternion.clone()
-    const target = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(-5), THREE.MathUtils.degToRad(15), 0))
+    const target = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(THREE.MathUtils.degToRad(-5), THREE.MathUtils.degToRad(15), 0)
+    )
     const start = performance.now()
     const tick = (t: number) => {
       const p = Math.min(1, (t - start) / 150)
-      THREE.Quaternion.slerp(head0, target, head.quaternion, p)
+      head.quaternion.copy(head0).slerp(target, p) // ← ここを修正
       this.vrm?.update(0)
       if (p < 1) requestAnimationFrame(tick)
     }
@@ -601,6 +658,126 @@ export class AvatarController {
     head.rotation.set(0, 0, 0)
     this.vrm?.update(0)
   }
+
+  // ===== プレゼン用ジェスチャ（追加） =====
+
+  // スライドを示す（右腕を上げて少し胸を前傾）
+  async present(durationMs = 1200) {
+    const h = this.vrm?.humanoid
+    const uaR = h?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+    const laR = h?.getNormalizedBoneNode(VRMHumanBoneName.RightLowerArm)
+    const handR = h?.getNormalizedBoneNode(VRMHumanBoneName.RightHand)
+    const chest = h?.getNormalizedBoneNode(VRMHumanBoneName.UpperChest) || h?.getNormalizedBoneNode(VRMHumanBoneName.Chest)
+    if (!uaR || !laR || !handR) return
+
+    const ua0 = uaR.quaternion.clone()
+    const la0 = laR.quaternion.clone()
+    const hd0 = handR.quaternion.clone()
+    const c0  = chest?.quaternion.clone()
+
+    const up = Math.max(200, durationMs * 0.35)
+    const hold = Math.max(100, durationMs * 0.3)
+    const down = Math.max(200, durationMs * 0.35)
+
+    try {
+      // 上げ：上腕Z±、前腕Xわずか、手首Zで手のひらを上に
+      await this.tweenQuat(uaR, new THREE.Euler(0, 0, THREE.MathUtils.degToRad(+35)), up, () => this.vrm?.update(0))
+      await this.tweenQuat(laR, new THREE.Euler(THREE.MathUtils.degToRad(-10), 0, 0), up, () => this.vrm?.update(0))
+      await this.tweenQuat(handR, new THREE.Euler(0, 0, THREE.MathUtils.degToRad(+12)), up, () => this.vrm?.update(0))
+      if (chest) await this.tweenQuat(chest, new THREE.Euler(THREE.MathUtils.degToRad(-6), 0, 0), up, () => this.vrm?.update(0))
+
+      if (hold > 0) await new Promise(r => setTimeout(r, hold))
+    } finally {
+      // 戻す
+      uaR.quaternion.copy(ua0)
+      laR.quaternion.copy(la0)
+      handR.quaternion.copy(hd0)
+      if (chest && c0) chest.quaternion.copy(c0)
+      this.vrm?.update(0)
+      if (down > 0) await new Promise(r => setTimeout(r, down))
+    }
+  }
+
+  // 両腕を広げる（歓迎・強調）
+  async openArms(durationMs = 900) {
+    const h = this.vrm?.humanoid
+    const L = h?.getNormalizedBoneNode(VRMHumanBoneName.LeftUpperArm)
+    const R = h?.getNormalizedBoneNode(VRMHumanBoneName.RightUpperArm)
+    if (!L || !R) return
+    const L0 = L.quaternion.clone(), R0 = R.quaternion.clone()
+
+    try {
+      await this.tweenQuat(L, new THREE.Euler(0, 0, THREE.MathUtils.degToRad(-25)), durationMs * 0.5, () => this.vrm?.update(0))
+      await this.tweenQuat(R, new THREE.Euler(0, 0, THREE.MathUtils.degToRad(+25)), durationMs * 0.5, () => this.vrm?.update(0))
+      await new Promise(r => setTimeout(r, durationMs * 0.2))
+    } finally {
+      L.quaternion.copy(L0); R.quaternion.copy(R0); this.vrm?.update(0)
+      await new Promise(r => setTimeout(r, durationMs * 0.3))
+    }
+  }
+
+  // 強調（胸を少し前→戻す）
+  async emphasize(durationMs = 600) {
+    const chest = this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.UpperChest)
+              || this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Chest)
+    if (!chest) return
+    const c0 = chest.quaternion.clone()
+    try {
+      await this.tweenQuat(chest, new THREE.Euler(THREE.MathUtils.degToRad(-8), 0, 0), durationMs * 0.4, () => this.vrm?.update(0))
+      await this.tweenQuat(chest, new THREE.Euler(0, 0, 0), durationMs * 0.6, () => {
+        chest.quaternion.copy(c0); this.vrm?.update(0)
+      })
+    } finally {
+      chest.quaternion.copy(c0); this.vrm?.update(0)
+    }
+  }
+
+  // ゆっくり二回うなずく（同意）
+  async agree(durationMs = 800) {
+    const neck = this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Neck)
+    if (!neck) return
+    const n0 = neck.quaternion.clone()
+    const one = async () => {
+      await this.tweenQuat(neck, new THREE.Euler(THREE.MathUtils.degToRad(-10), 0, 0), durationMs * 0.35, () => this.vrm?.update(0))
+      await this.tweenQuat(neck, new THREE.Euler(0, 0, 0), durationMs * 0.15, () => { neck.quaternion.copy(n0); this.vrm?.update(0) })
+    }
+    try {
+      await one(); await one()
+    } finally {
+      neck.quaternion.copy(n0); this.vrm?.update(0)
+    }
+  }
+
+  // 二回首を横に振る（否定）
+  async disagree(durationMs = 800) {
+    const head = this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
+    if (!head) return
+    const h0 = head.quaternion.clone()
+    const yaw = THREE.MathUtils.degToRad(12)
+    const one = async (sign: 1|-1) => {
+      await this.tweenQuat(head, new THREE.Euler(0, sign * yaw, 0), durationMs * 0.3, () => this.vrm?.update(0))
+      await this.tweenQuat(head, new THREE.Euler(0, 0, 0), durationMs * 0.2, () => { head.quaternion.copy(h0); this.vrm?.update(0) })
+    }
+    try {
+      await one(+1); await one(-1)
+    } finally {
+      head.quaternion.copy(h0); this.vrm?.update(0)
+    }
+  }
+
+  // 首を軽く傾ける（考える）
+  async think(durationMs = 800) {
+    const head = this.vrm?.humanoid?.getNormalizedBoneNode(VRMHumanBoneName.Head)
+    if (!head) return
+    const h0 = head.quaternion.clone()
+    try {
+      await this.tweenQuat(head, new THREE.Euler(0, THREE.MathUtils.degToRad(6), THREE.MathUtils.degToRad(10)), durationMs * 0.5, () => this.vrm?.update(0))
+      await new Promise(r => setTimeout(r, durationMs * 0.2))
+    } finally {
+      head.quaternion.copy(h0); this.vrm?.update(0)
+    }
+  }
+
 
   
 }

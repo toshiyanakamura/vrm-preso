@@ -10,7 +10,7 @@ type InlineAction =
   | 'bow'
   | 'lookSlide' | 'lookAudience'
   | 'happy' | 'angry' | 'surprised' | 'neutral' | 'sad'
-
+  | 'wait' | 'present' | 'openArms' | 'emphasize' | 'agree' | 'disagree' | 'think'
 export class PresoPlayer {
   private audio: HTMLAudioElement
   private isPlaying = false
@@ -199,19 +199,30 @@ export class PresoPlayer {
   // ---- 音声再生（インラインアクション対応）----
   private async speakSegments(rawText: string, speaker: number, tts: TTSParams) {
     const segments = this.splitTextWithInlineActions(rawText)
+
     for (const seg of segments) {
       await this.waitIfPaused()
       if (this.abort?.signal.aborted) break
 
-      if (seg.type === 'text') {
-        const safe = seg.text.replace(/\{[^{}\n]{1,50}\}/g, '').trim()
-        if (!safe) continue
-        await this.speakOnce(safe, speaker, tts)
-      } else {
+      if (seg.type === 'action') {
+        if (seg.name === 'wait') {
+          // ms 指定があれば待機
+          if (seg.ms && seg.ms > 0) {
+            await new Promise(r => setTimeout(r, seg.ms))
+          }
+          continue // 待機後に続行
+        }
+
         await this.fireInlineAction(seg.name, seg.ms)
+        continue
       }
+
+      const safe = seg.text.replace(/\{[^{}\n]{1,50}\}/g, '').trim()
+      if (!safe) continue
+      await this.speakOnce(safe, speaker, tts)
     }
   }
+
 
   private async speakOnce(text: string, speaker: number, tts: TTSParams) {
     try {
@@ -266,7 +277,12 @@ export class PresoPlayer {
       .replace(/\uFF5D/g, '}')
       .replace(/[\u200B-\u200D\uFEFF]/g, '')
 
-    const re = /\{\s*(nod|wave|waveL|waveR|pointL|pointR|bow|lookSlide|lookAudience|happy|angry|surprised|neutral|sad)\s*(?::\s*(\d{2,5}))?\s*\}/g
+    // splitTextWithInlineActions 内の正規表現
+    // splitTextWithInlineActions の re を置き換え
+    const re = /\{\s*(nod|wave|waveL|waveR|pointL|pointR|bow|lookSlide|lookAudience|happy|angry|surprised|neutral|sad|wait|present|openArms|emphasize|agree|disagree|think)\s*(?::\s*(\d{2,5}))?\s*\}/g
+
+
+
     const out: Array<{ type: 'text' | 'action'; text?: string; name?: InlineAction; ms?: number }> = []
     let last = 0, m: RegExpExecArray | null
 
@@ -285,6 +301,7 @@ export class PresoPlayer {
     if (!act) return
     try {
       switch (act) {
+        case 'nop': break // ← 何もしない
         case 'nod': this.avatar?.['nod']?.(ms ?? 400); break
         case 'wave': this.avatar?.['waveR']?.(ms ?? 900); break
         case 'waveR': this.avatar?.['waveR']?.(ms ?? 900); break
@@ -299,6 +316,12 @@ export class PresoPlayer {
         case 'surprised': this.avatar.setEmotion('surprised'); break
         case 'neutral': this.avatar.setEmotion('neutral'); break
         case 'sad': this.avatar.setEmotion('sad'); break
+        case 'present':    await (this.avatar as any)['present']?.(ms ?? 1200); break;
+        case 'openArms':   await (this.avatar as any)['openArms']?.(ms ?? 900); break;
+        case 'emphasize':  await (this.avatar as any)['emphasize']?.(ms ?? 600); break;
+        case 'agree':      await (this.avatar as any)['agree']?.(ms ?? 800); break;
+        case 'disagree':   await (this.avatar as any)['disagree']?.(ms ?? 800); break;
+        case 'think':      await (this.avatar as any)['think']?.(ms ?? 800); break;
       }
     } catch (e) {
       console.warn('inline action error:', act, e)

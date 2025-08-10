@@ -1,7 +1,7 @@
 {
   "title": "動画入りプレゼンデモ１１１１",
   "defaults": {
-    "speakerId": 1,
+    "speakerId": 24,
     "tts": {
       "speedScale": 1,
       "pitchScale": 0,
@@ -12,76 +12,18 @@
   "cues": [
     {
       "slide": 1,
-      "image": "01.PNG",
+      "image": "スライド1.PNG",
       "videoWait": "none",
-      "subtitle": "こんにちは {bow} 高度ポリテクセンターです。　今日は外観検査システムの動作を紹介します。",
-      "emotion": "happy",
+      "subtitle": "こんにちは{bow:2000}\n\n{wait:5000}アバタ－モデルがプレゼンテーションするデモンストレーションを行います。\n",
+      "emotion": "neutral",
       "narration": [],
       "duckVideo": false
     },
     {
       "slide": 2,
-      "image": "02.PNG",
+      "image": "スライド2.PNG",
       "videoWait": "none",
-      "subtitle": "{pointR} 本装置はロボット、AIを組み合わせた外観検査装置となります。金属加工部品の傷の有り無しを、カメラを使ってエッジAIで判定し、傷が無いものを良品として出荷します。{lookSlide}間欠運転をしているコンベアの左端からワークを供給し、真ん中に設置したカメラで画像データを取得して、判定をします。不良品はベルトコンベアの右端から落とし、良品のみをロボットで箱詰めをします。ベルトコンベアの左端から供給するワークはランダムな位置に置くため、カメラでは良品と不良品の判定とともにワークの位置座標であるＸ座標、Ｙ座標を取得します。ロボットではカメラの位置データを元にワークを掴みに行きます。掴んだ良品ワークはロボットでトレイ上にならべて出荷できる状態にします。",
-      "emotion": "neutral",
-      "narration": [],
-      "duckVideo": false
-    },
-    {
-      "slide": 3,
-      "image": "03.PNG",
-      "videoWait": "none",
-      "subtitle": "{pointR} 工場全体を統括しているのは通常PLCと言われる制御装置であるため、{bow} PLCの画像処理装置としてのエッジAI、PLCのアクチュエータとしてのロボットの位置づけで、PLCの下にエッジAIとロボットを置くシステム構成となります。{happy}エッジAI、PLC、ロボットを連携させるために、3つのデバイス装置間をフィールドバスネットワークと言われる工業用ネットワークで接続し、装置を連携させて動かしています。フィールドバスネットワークはMODBUSとEthernet/IPを使用しています。",
-      "emotion": "neutral",
-      "narration": [],
-      "duckVideo": false
-    },
-    {
-      "slide": 4,
-      "video": "外観検査_アバタ用.mp4",
-      "videoWait": "none",
-      "subtitle": "",
-      "emotion": "neutral",
-      "narration": [
-        {
-          "at": 0,
-          "text": "こちらをご覧ください",
-          "emotion": "neutral"
-        },
-        {
-          "at": 5,
-          "text": "{lookSlide}対象物をコンベアに載せます。",
-          "emotion": "neutral"
-        },
-        {
-          "at": 12,
-          "text": " {pointR} AIにより異常が検出されました ",
-          "emotion": "serious"
-        },
-        {
-          "at": 23,
-          "text": "ロボットは異常品を省き、正常品だけをトレーに載せます。",
-          "emotion": "happy"
-        },
-        {
-          "at": 30,
-          "text": "しばらく動作をみてください",
-          "emotion": "neutral"
-        },
-        {
-          "at": 45,
-          "text": "{bow}　動作の説明は以上です。",
-          "emotion": "happy"
-        }
-      ],
-      "duckVideo": false
-    },
-    {
-      "slide": 4,
-      "image": "04.PNG",
-      "videoWait": "none",
-      "subtitle": "{nod} ご清聴ありがとうございました",
+      "subtitle": "{wait:1000}{happy}アバターのモデルはVRMに対応しています。\n{wait:1000}{neutral}自作するか公開されているVRMを利用します。\n{wait:1000}{pointR:1000}{neutral}アプリ左上のファイル選択をクリックし読み込みたいVRMファイルを指定します\n{wait:1000}読み込んだモデルは{wave:2000}{waveL:2000}マウスで好きな位置に配置できます。\n\nこちらのスライドも{present:1200}モデル同様自由に位置と大きさを指定できます。\n{wait:1000}モデルの音声などはアプリ上部の設定を開くから指定できます。{wait:1000}現状ではvoicevoxの音声とOpenAIのtext to speachの音声が利用できます。{agree}\n",
       "emotion": "neutral",
       "narration": [],
       "duckVideo": false
